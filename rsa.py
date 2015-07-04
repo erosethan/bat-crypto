@@ -1,8 +1,16 @@
 #!/usr/bin/python
 
+import math
 import random
 
 class RSA:
+
+  key_size = 0
+  pack_size = 0
+
+  def __init__(self, ksize = 8):
+    self.key_size = max(ksize, 8)
+    self.pack_size = self.key_size >> 3
 
   def FastExponentiation(self, a, n, m):
     if n == 0: return 1
@@ -33,9 +41,9 @@ class RSA:
     (gcd, x, y) = self.ExtendedEuclidian(b, a % b, m)
     return (gcd, y, (x + m - ((a / b) * y) % m) % m)
 
-  def GenerateKeys(self, size, acc = 100):
+  def GenerateKeys(self, acc = 100):
     p, q = 0, 0
-    for i in xrange(size):
+    for i in xrange(self.key_size):
       p = (p << 1) | random.randint(0, 1)
       q = (q << 1) | random.randint(0, 1)
     while not self.IsProbablePrime(p, acc): p += 1
@@ -48,8 +56,35 @@ class RSA:
     return (e, n, d)
 
   def Encrypt(self, m, e, n):
-    return self.FastExponentiation(m, e, n)
+    encrypted = ''
+    p = self.pack_size
+    l = (p - len(m) % p) % p
+    for i in xrange(l): m += ' '
+    for i in xrange(len(m) / p):
+      group = 0
+      for j in xrange(p):
+        mi = ord(m[i * p + j])
+        group = (group << 8) | mi
+      group = self.FastExponentiation(group, e, n)
+      encrypted += str(group) + ' '
+    return encrypted.strip()
 
   def Decrypt(self, c, d, n):
-    return self.FastExponentiation(c, d, n)
+    decrypted = ''
+    for ci in c.split():
+      ci, grp, buffer = int(ci), 0, ''
+      mi = self.FastExponentiation(ci, d, n)
+      while grp < self.pack_size:
+        buffer += chr(mi & 255)
+        grp, mi = grp + 1, mi >> 8
+      decrypted += buffer[::-1]
+    return decrypted.strip()
+
+if __name__ == '__main__':
+
+  rsa = RSA(32)
+  (e, n, d) = rsa.GenerateKeys()
+  encrypt = rsa.Encrypt('test rsa', e, n)
+  decrypt = rsa.Decrypt(encrypt, d, n)
+  print '%s -> %s' % (encrypt, decrypt)
 
