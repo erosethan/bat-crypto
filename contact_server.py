@@ -4,7 +4,6 @@ import sys
 import time
 import socket
 import threading
-from rsa import *
 
 class ContactServer:
 
