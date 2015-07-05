@@ -34,7 +34,7 @@ class ContactServer:
     sock.settimeout(1)
     print 'Getting %s\'s key' % ip
     pkey = self.ReadLine(sock)
-    self.directory[ip] = pkey + '\n'
+    self.directory[ip] = pkey
     print '%s is now online!' % ip
 
     while self.is_active:
@@ -43,11 +43,11 @@ class ContactServer:
         if not cmd: break
         if cmd == 'U':
           pkey = self.ReadLine(sock)
-          self.directory[ip] = pkey + '\n'
+          self.directory[ip] = pkey
           print '%s updated his key' % ip
         elif cmd == 'G':
           query = self.ReadLine(sock)
-          sock.send(self.directory.get(query, '\n'))
+          sock.send('%s\n' % self.directory.get(query, ''))
           print '%s got %s\'s key' % (ip, query)
       except: pass
 
