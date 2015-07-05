@@ -11,7 +11,7 @@ class ContactServer:
   is_active = False
   directory = dict()
 
-  def __init__(self, addr, port = 7878):
+  def __init__(self, addr, port):
     self.serv_sock = socket.socket(
       socket.AF_INET, socket.SOCK_STREAM)
     print 'Server running at %s' % addr
@@ -75,14 +75,16 @@ class ContactServer:
 
 if __name__ == '__main__':
 
-  address = '127.0.0.1'
+  address, port = '127.0.0.1', 7878
+
   if len(sys.argv) > 1:
-    address = sys.argv[1]
+    local = sys.argv[1]
+    local = local.split(':')
+    address = local[0]
+    if len(local) > 1:
+      port = int(local[1])
 
-  if len(sys.argv) > 2:
-    port = int(sys.argv[2])
-    server = ContactServer(address, port)
-  else: server = ContactServer(address)
-
+  server = ContactServer(
+    address, port)
   server.Run()
 
