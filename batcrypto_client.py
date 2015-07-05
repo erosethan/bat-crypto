@@ -32,13 +32,37 @@ def Receiver(ip, port):
         if verification == ip:
           sdes_onetime_key = rsa.Decrypt(
             ReadLine(sock), keys[2], keys[1])
-          print sdes_onetime_key
+          print '\n' + sdes_onetime_key
       finally:
         sock.close()
     except: pass
 
 def SendMessageTo(addr):
-  print addr
+  addr = addr.split(':')
+  ip, port = addr[0], 7879
+  if len(addr) > 1:
+    port = int(addr[1])
+  try:
+    server.send('G%s\n' % ip)
+    keys = ReadLine(server).split()
+    if len(keys) == 0:
+      return 'send: %s is not online' % ip
+  except: return 'send: Cannot reach server'
+  try:
+    e, n = int(keys[0]), int(keys[1])
+  except: return 'send: Internal error'
+  try:
+    dest_sock = socket.socket(
+      socket.AF_INET, socket.SOCK_STREAM)
+    dest_sock.connect((ip, port))
+    verification = rsa.Encrypt(ip, e, n)
+    dest_sock.send('%s\n' % verification)
+
+    msg = raw_input('msg: ')
+    msg = rsa.Encrypt(msg, e, n)
+    dest_sock.send('%s\n' % msg)
+  except: return 'send: Failed to send'
+  return None
 
 if __name__ == '__main__':
 
@@ -76,23 +100,29 @@ if __name__ == '__main__':
     args = (ip, port))
   thread.start()
 
+  print 'Batcrypto client started!'
+  print 'Listening @ %s:%d' % (ip, port)
   try:
     while True:
-      input = raw_input().split()
+      input = raw_input('cmd: ').split()
       if len(input) == 0: continue
 
       command = input[0]
       if command == 'send':
         if len(input) > 1:
-          SendMessageTo(input[1])
+          error = SendMessageTo(input[1])
+          if error != None: print error
         else: print 'send: Missing address'
 
-      elif command == 'regen-key':
+      elif command == 'regen-keys':
         keys = rsa.GenerateKeys()
+        print 'regen-keys: Keys regenerated!'
         server.send('U%d %d\n' % (keys[0], keys[1]))
 
+      elif command == 'clear':
+        for i in xrange(50): print ''
       elif command == 'shutdown': break
-      else: print command + ': command not found'
+      else: print command + ': Command not found'
   except: pass
   finally:
     print '\nShutting down, bye!'

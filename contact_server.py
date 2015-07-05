@@ -69,7 +69,7 @@ class ContactServer:
         thread.start()
         time.sleep(0.1)
     except:
-      print '\nServer shutted down'
+      print '\nShutting down, bye!'
       self.is_active = False
       self.serv_sock.close()
 
