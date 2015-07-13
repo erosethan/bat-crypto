@@ -18,22 +18,40 @@ class ContactServer:
     self.serv_sock.bind((addr, port))
     print 'Binding at port %d' % port
 
-  def ReadLine(self, sock):
-    line_buffer = ''
+  def RecvPackage(self, sock):
+    buffer = ''
     while True:
       try:
-        byte = sock.recv(1)
-        if not byte: break
-        if byte == '\0': break
-        line_buffer += byte
+        size = sock.recv(1)
+        if not size: break
+        if size == '\0': break
+        size = ord(size)
+        bytes = sock.recv(size)
+        buffer += bytes
       except: pass
-    return line_buffer
+    return buffer
+
+  def SendPackage(self, pack, sock):
+    buffer = ['\0']
+    try:
+      for byte in pack:
+        size = ord(buffer[0]) + 1
+        buffer[0] = chr(size)
+        buffer.append(byte)
+        if size == 255:
+          sock.send(''.join(buffer))
+          buffer = ['\0']
+      if buffer[0] != '\0':
+        sock.send(''.join(buffer))
+      sock.send('\0')
+    except: return False
+    return True
 
   def Connection(self, sock, addr):
     ip = addr[0]
     sock.settimeout(1)
     print 'Getting %s\'s key' % ip
-    pkey = self.ReadLine(sock)
+    pkey = self.RecvPackage(sock)
     self.directory[ip] = pkey
     print '%s is now online!' % ip
 
@@ -42,12 +60,13 @@ class ContactServer:
         cmd = sock.recv(1)
         if not cmd: break
         if cmd == 'U':
-          pkey = self.ReadLine(sock)
+          pkey = self.RecvPackage(sock)
           self.directory[ip] = pkey
           print '%s updated his key' % ip
         elif cmd == 'G':
-          query = self.ReadLine(sock)
-          sock.send('%s\0' % self.directory.get(query, ''))
+          query = self.RecvPackage(sock)
+          pkey = self.directory.get(query, '')
+          self.SendPackage(pkey, sock)
           print '%s got %s\'s key' % (ip, query)
       except: pass
 

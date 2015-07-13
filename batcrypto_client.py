@@ -7,16 +7,34 @@ import threading
 from rsa import *
 from sdes import *
 
-def ReadLine(sock):
-  line_buffer = ''
+def RecvPackage(sock):
+  buffer = ''
   while True:
     try:
-      byte = sock.recv(1)
-      if not byte: break
-      if byte == '\0': break
-      line_buffer += byte
+      size = sock.recv(1)
+      if not size: break
+      if size == '\0': break
+      size = ord(size)
+      bytes = sock.recv(size)
+      buffer += bytes
     except: pass
-  return line_buffer
+  return buffer
+
+def SendPackage(pack, sock):
+  buffer = ['\0']
+  try:
+    for byte in pack:
+      size = ord(buffer[0]) + 1
+      buffer[0] = chr(size)
+      buffer.append(byte)
+      if size == 255:
+        sock.send(''.join(buffer))
+        buffer = ['\0']
+    if buffer[0] != '\0':
+      sock.send(''.join(buffer))
+    sock.send('\0')
+  except: return False
+  return True
 
 def Receiver(ip, port):
   recv_sock = socket.socket(
@@ -30,16 +48,16 @@ def Receiver(ip, port):
       (sock, addr) = recv_sock.accept()
       try:
         verification = rsa.Decrypt(
-          ReadLine(sock), keys[2], keys[1])
+          RecvPackage(sock), keys[2], keys[1])
         if verification == ip:
-          sdes_info = rsa.Decrypt(ReadLine(sock),
-            keys[2], keys[1]).split()
+          sdes_info = rsa.Decrypt(RecvPackage(
+            sock), keys[2], keys[1]).split()
           sdes_key = int(sdes_info[0])
           sdes_iv = int(sdes_info[1])
 
           sdes = SDES(sdes_key)
-          print '\n%s: %s' % (addr[0],
-            sdes.Decrypt(ReadLine(sock), sdes_iv))
+          msg = sdes.Decrypt(RecvPackage(sock), sdes_iv)
+          print '\n%s: %s' % (addr[0], msg)
       finally:
         sock.close()
     except: pass
@@ -51,8 +69,9 @@ def SendMessageTo(addr):
     port = int(addr[1])
   msg = raw_input('msg: ')
   try:
-    server.send('G%s\0' % ip)
-    keys = ReadLine(server).split()
+    server.send('G')
+    SendPackage(ip, server)
+    keys = RecvPackage(server).split()
     if len(keys) == 0:
       return 'send: %s is not online' % ip
   except: return 'send: Cannot reach server'
@@ -64,17 +83,17 @@ def SendMessageTo(addr):
       socket.AF_INET, socket.SOCK_STREAM)
     dest_sock.connect((ip, port))
     verification = rsa.Encrypt(ip, e, n)
-    dest_sock.send('%s\0' % verification)
+    SendPackage('%s' % verification, dest_sock)
 
-    sdes_iv = random.randint(1, 255)
-    sdes_key = random.randint(1, 1023)
+    sdes_iv = random.randint(0, 255)
+    sdes_key = random.randint(0, 1023)
     sdes_info = '%d %d' % (sdes_key, sdes_iv)
     sdes_info = rsa.Encrypt(sdes_info, e, n)
-    dest_sock.send('%s\0' % sdes_info)
+    SendPackage('%s' % sdes_info, dest_sock)
 
     sdes = SDES(sdes_key)
     msg = sdes.Encrypt(msg, sdes_iv)
-    dest_sock.send('%s\0' % msg)
+    SendPackage('%s' % msg, dest_sock)
   except: return 'send: Failed to send'
   return None
 
@@ -103,7 +122,7 @@ if __name__ == '__main__':
     server = socket.socket(
       socket.AF_INET, socket.SOCK_STREAM)
     server.connect((sip, sport))
-    server.send('%d %d\0' % (keys[0], keys[1]))
+    SendPackage('%d %d' % (keys[0], keys[1]), server)
   except:
     print 'Connection to server failed!'
     sys.exit(0) # Abort client.
@@ -129,9 +148,9 @@ if __name__ == '__main__':
         else: print 'send: Missing address'
 
       elif command == 'regen-keys':
-        keys = rsa.GenerateKeys()
+        keys, nil = rsa.GenerateKeys(), server.send('U')
+        SendPackage('%d %d' % (keys[0], keys[1]), server)
         print 'regen-keys: Keys regenerated!'
-        server.send('U%d %d\0' % (keys[0], keys[1]))
 
       elif command == 'clear':
         for i in xrange(100): print ''
