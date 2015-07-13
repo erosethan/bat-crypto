@@ -2,8 +2,10 @@
 
 import sys
 import socket
+import random
 import threading
 from rsa import *
+from sdes import *
 
 def ReadLine(sock):
   line_buffer = ''
@@ -11,7 +13,7 @@ def ReadLine(sock):
     try:
       byte = sock.recv(1)
       if not byte: break
-      if byte == '\n': break
+      if byte == '\0': break
       line_buffer += byte
     except: pass
   return line_buffer
@@ -30,9 +32,14 @@ def Receiver(ip, port):
         verification = rsa.Decrypt(
           ReadLine(sock), keys[2], keys[1])
         if verification == ip:
-          sdes_onetime_key = rsa.Decrypt(
-            ReadLine(sock), keys[2], keys[1])
-          print '\n' + sdes_onetime_key
+          sdes_info = rsa.Decrypt(ReadLine(sock),
+            keys[2], keys[1]).split()
+          sdes_key = int(sdes_info[0])
+          sdes_iv = int(sdes_info[1])
+
+          sdes = SDES(sdes_key)
+          print '\n%s: %s' % (addr[0],
+            sdes.Decrypt(ReadLine(sock), sdes_iv))
       finally:
         sock.close()
     except: pass
@@ -42,8 +49,9 @@ def SendMessageTo(addr):
   ip, port = addr[0], 7879
   if len(addr) > 1:
     port = int(addr[1])
+  msg = raw_input('msg: ')
   try:
-    server.send('G%s\n' % ip)
+    server.send('G%s\0' % ip)
     keys = ReadLine(server).split()
     if len(keys) == 0:
       return 'send: %s is not online' % ip
@@ -56,11 +64,17 @@ def SendMessageTo(addr):
       socket.AF_INET, socket.SOCK_STREAM)
     dest_sock.connect((ip, port))
     verification = rsa.Encrypt(ip, e, n)
-    dest_sock.send('%s\n' % verification)
+    dest_sock.send('%s\0' % verification)
 
-    msg = raw_input('msg: ')
-    msg = rsa.Encrypt(msg, e, n)
-    dest_sock.send('%s\n' % msg)
+    sdes_iv = random.randint(1, 255)
+    sdes_key = random.randint(1, 1023)
+    sdes_info = '%d %d' % (sdes_key, sdes_iv)
+    sdes_info = rsa.Encrypt(sdes_info, e, n)
+    dest_sock.send('%s\0' % sdes_info)
+
+    sdes = SDES(sdes_key)
+    msg = sdes.Encrypt(msg, sdes_iv)
+    dest_sock.send('%s\0' % msg)
   except: return 'send: Failed to send'
   return None
 
@@ -89,7 +103,7 @@ if __name__ == '__main__':
     server = socket.socket(
       socket.AF_INET, socket.SOCK_STREAM)
     server.connect((sip, sport))
-    server.send('%d %d\n' % (keys[0], keys[1]))
+    server.send('%d %d\0' % (keys[0], keys[1]))
   except:
     print 'Connection to server failed!'
     sys.exit(0) # Abort client.
@@ -117,10 +131,10 @@ if __name__ == '__main__':
       elif command == 'regen-keys':
         keys = rsa.GenerateKeys()
         print 'regen-keys: Keys regenerated!'
-        server.send('U%d %d\n' % (keys[0], keys[1]))
+        server.send('U%d %d\0' % (keys[0], keys[1]))
 
       elif command == 'clear':
-        for i in xrange(50): print ''
+        for i in xrange(100): print ''
       elif command == 'shutdown': break
       else: print command + ': Command not found'
   except: pass
