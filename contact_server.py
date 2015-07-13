@@ -24,7 +24,7 @@ class ContactServer:
       try:
         byte = sock.recv(1)
         if not byte: break
-        if byte == '\n': break
+        if byte == '\0': break
         line_buffer += byte
       except: pass
     return line_buffer
@@ -47,7 +47,7 @@ class ContactServer:
           print '%s updated his key' % ip
         elif cmd == 'G':
           query = self.ReadLine(sock)
-          sock.send('%s\n' % self.directory.get(query, ''))
+          sock.send('%s\0' % self.directory.get(query, ''))
           print '%s got %s\'s key' % (ip, query)
       except: pass
 
